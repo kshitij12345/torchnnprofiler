@@ -26,5 +26,6 @@ jobs:
       - name: Run linters
         uses: wearerequired/lint-action@v2
         with:
+          continue_on_error: false
           black: true
           flake8: true
