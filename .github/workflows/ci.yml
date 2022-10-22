@@ -42,4 +42,4 @@ jobs:
         python -c "import nnprofiler"
     - name: Test
       run: |
-        pytest nnprofiler/tests/*
+        python -m pytest nnprofiler/tests/*
