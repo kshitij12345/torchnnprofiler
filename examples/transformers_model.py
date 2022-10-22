@@ -18,11 +18,9 @@ labels = torch.tensor([1, 0]).unsqueeze(0)
 outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
 
 with LayerProf(model) as prof:
-    for name, _ in get_children(model):
-        prof.attach_backward_hook(name)
-
     outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
     loss = outputs.loss
     loss.backward()
+
     prof.get_timings()
     print(prof.layerwise_summary())

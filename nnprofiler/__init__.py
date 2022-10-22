@@ -20,23 +20,18 @@ def get_children(model: torch.nn.Module, name=""):
 
 
 class LayerProf:
-    def __init__(self, model):
+    def __init__(self, model, profile_all_layers=True):
         assert isinstance(model, torch.nn.Module)
         self.model = model
+        self.profile_all_layers = profile_all_layers
         self.in_context_mode = False
-
-    def _throw_if_not_in_context_mode(self):
-        if not self.in_context_mode:
-            msg = "You should call the nnprofiler.LayerProf as a context-manager using `with`"
-            raise RuntimeError(msg)
-
-    def __enter__(self):
-        self.in_context_mode = True
         self.layers_event = {}
         self.layers = {}
         self.layer_to_name = {}
         self.layer_device = {}
         self.cnt = 0
+        self.removable_handles = []
+
         for name, layer in get_children(self.model):
             params = list(layer.parameters())
             if params == []:
@@ -60,12 +55,22 @@ class LayerProf:
                     "forward_post": None,
                     "backward_post": None,
                 }
+            
+            if self.profile_all_layers:
+                self._attach_backward_hook(name)
 
+    def _throw_if_not_in_context_mode(self):
+        if not self.in_context_mode:
+            msg = "You should call the nnprofiler.LayerProf as a context-manager using `with`"
+            raise RuntimeError(msg)
+
+    def __enter__(self):
+        self.in_context_mode = True
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        for name, layer in self.layers.items():
-            layer.extra_repr = None
+        for handle in self.removable_handles:
+            handle.remove()
 
     def _register_cuda_hooks(self, name):
         events = self.layers_event[name]
@@ -115,13 +120,18 @@ class LayerProf:
         layer.register_full_backward_pre_hook(bw_pre_hook)
         layer.register_full_backward_hook(bw_hook)
 
-    def attach_backward_hook(self, name):
-        self._throw_if_not_in_context_mode()
+    def _attach_backward_hook(self, name):
         device = self.layer_device[name]
         if device == torch.device("cuda"):
             self._register_cuda_hooks(name)
 
         self._register_cpu_hooks(name)
+
+    def attach_backward_hook(self, name):
+        msg = "Manually attaching hook is only allowed when profile_all_layers is False"
+        assert self.profile_all_layers is False, msg
+        self._throw_if_not_in_context_mode()
+        self._attach_backward_hook(name)
 
     def get_timings(self):
         self._throw_if_not_in_context_mode()

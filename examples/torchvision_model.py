@@ -8,7 +8,7 @@ resnet = torchvision.models.resnet50(weights=None)
 inp = torch.randn(10, 3, 224, 224)
 out = resnet(inp)
 
-with LayerProf(resnet) as layer_prof:
+with LayerProf(resnet, profile_all_layers=False) as layer_prof:
     for name, layer in get_children(resnet):
         if "relu" in name or "bn" in name:
             continue

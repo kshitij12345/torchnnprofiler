@@ -18,9 +18,6 @@ y = net(torch.randn(16, 10, requires_grad=True))
 y.sum().backward()
 
 with LayerProf(net) as prof:
-    for name, layer in get_children(net):
-        prof.attach_backward_hook(name)
-
     y = net(torch.randn(16, 10, requires_grad=True))
     y.sum().backward()
 
