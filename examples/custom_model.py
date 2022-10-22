@@ -13,14 +13,16 @@ class MyNet(torch.nn.Module):
 
 
 net = MyNet()
-prof = LayerProf(net)
 
-for name, layer in get_children(net):
-    prof.attach_backward_hook(name)
-
+# Warm-up
 y = net(torch.randn(16, 10, requires_grad=True))
 y.sum().backward()
 
-y = net(torch.randn(16, 10, requires_grad=True))
-y.sum().backward()
-print(prof.get_timings())
+with LayerProf(net) as prof:
+    for name, layer in get_children(net):
+        prof.attach_backward_hook(name)
+
+    y = net(torch.randn(16, 10, requires_grad=True))
+    y.sum().backward()
+    prof.get_timings()
+    print(net)

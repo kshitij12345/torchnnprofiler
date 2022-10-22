@@ -22,12 +22,14 @@ class LayerProf:
     def __init__(self, model):
         assert isinstance(model, torch.nn.Module)
         self.model = model
+
+    def __enter__(self):
         self.layers_event = {}
         self.layers = {}
         self.layer_to_name = {}
         self.layer_device = {}
         self.cnt = 0
-        for name, layer in get_children(model):
+        for name, layer in get_children(self.model):
             params = list(layer.parameters())
             if params == []:
                 self.layer_device[name] = None
@@ -37,6 +39,9 @@ class LayerProf:
             self.layers[name] = layer
 
             def repr_fn(name):
+                if not hasattr(self, 'layer_times'):
+                    return ""
+
                 if name in self.layer_times:
                     times = self.layer_times[name]
                     forward_str = "Forward Time: " + str(times['forward'])
@@ -60,6 +65,12 @@ class LayerProf:
                     "forward_post": None,
                     "backward_post": None,
                 }
+        
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        for name, layer in self.layers.items():
+            layer.extra_repr = None
 
     def register_cuda_hooks(self, name):
         events = self.layers_event[name]
