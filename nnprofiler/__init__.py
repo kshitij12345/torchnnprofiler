@@ -23,8 +23,15 @@ class LayerProf:
     def __init__(self, model):
         assert isinstance(model, torch.nn.Module)
         self.model = model
+        self.in_context_mode = False
+
+    def _throw_if_not_in_context_mode(self):
+        if not self.in_context_mode:
+            msg = "You should call the nnprofiler.LayerProf as a context-manager using `with`"
+            raise RuntimeError(msg)
 
     def __enter__(self):
+        self.in_context_mode = True
         self.layers_event = {}
         self.layers = {}
         self.layer_to_name = {}
@@ -73,7 +80,7 @@ class LayerProf:
         for name, layer in self.layers.items():
             layer.extra_repr = None
 
-    def register_cuda_hooks(self, name):
+    def _register_cuda_hooks(self, name):
         events = self.layers_event[name]
         layer: torch.nn.Module = self.layers[name]
 
@@ -97,7 +104,7 @@ class LayerProf:
         layer.register_full_backward_pre_hook(bw_pre_hook)
         layer.register_full_backward_hook(bw_hook)
 
-    def register_cpu_hooks(self, name):
+    def _register_cpu_hooks(self, name):
         events = self.layers_event[name]
         layer: torch.nn.Module = self.layers[name]
 
@@ -122,13 +129,15 @@ class LayerProf:
         layer.register_full_backward_hook(bw_hook)
 
     def attach_backward_hook(self, name):
+        self._throw_if_not_in_context_mode()
         device = self.layer_device[name]
         if device == torch.device("cuda"):
-            self.register_cuda_hooks(name)
+            self._register_cuda_hooks(name)
 
-        self.register_cpu_hooks(name)
+        self._register_cpu_hooks(name)
 
     def get_timings(self):
+        self._throw_if_not_in_context_mode()
         self.layer_times = {}
         if self.cnt == 0:
             raise RuntimeError(
