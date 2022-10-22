@@ -1,5 +1,4 @@
 import torch
-import json
 import datetime
 from functools import partial
 
@@ -9,7 +8,9 @@ def get_children(model: torch.nn.Module, name=""):
     flatt_children = []
     # Base case
     if children == []:
-        return [[name, model], ]
+        return [
+            [name, model],
+        ]
 
     for child_name, child in children:
         if name != "":
@@ -39,19 +40,19 @@ class LayerProf:
             self.layers[name] = layer
 
             def repr_fn(name):
-                if not hasattr(self, 'layer_times'):
+                if not hasattr(self, "layer_times"):
                     return ""
 
                 if name in self.layer_times:
                     times = self.layer_times[name]
-                    forward_str = "Forward Time: " + str(times['forward'])
-                    backward_str = "Backward Time: " + str(times['backward'])
+                    forward_str = "Forward Time: " + str(times["forward"])
+                    backward_str = "Backward Time: " + str(times["backward"])
                     return forward_str + " | " + backward_str
 
                 return ""
 
             layer.extra_repr = partial(repr_fn, name=name)
-            if self.layer_device[name] == torch.device('cuda'):
+            if self.layer_device[name] == torch.device("cuda"):
                 self.layers_event[name] = {
                     "forward_pre": torch.cuda.Event(enable_timing=True),
                     "backward_pre": torch.cuda.Event(enable_timing=True),
@@ -65,7 +66,7 @@ class LayerProf:
                     "forward_post": None,
                     "backward_post": None,
                 }
-        
+
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
@@ -122,7 +123,7 @@ class LayerProf:
 
     def attach_backward_hook(self, name):
         device = self.layer_device[name]
-        if device == torch.device('cuda'):
+        if device == torch.device("cuda"):
             self.register_cuda_hooks(name)
 
         self.register_cpu_hooks(name)
@@ -130,23 +131,31 @@ class LayerProf:
     def get_timings(self):
         self.layer_times = {}
         if self.cnt == 0:
-            raise RuntimeError("None of the layer recorded time. Did you call forward or backward?")
+            raise RuntimeError(
+                "None of the layer recorded time. Did you call forward or backward?"
+            )
 
         for key, value in self.layers_event.items():
             try:
-                if self.layer_device[key] == torch.device('cuda'):
+                if self.layer_device[key] == torch.device("cuda"):
                     self.layer_times[key] = {
                         "backward": value["backward_pre"].elapsed_time(
                             value["backward_post"]
                         ),
-                        "forward": value["forward_pre"].elapsed_time(value["forward_post"]),
+                        "forward": value["forward_pre"].elapsed_time(
+                            value["forward_post"]
+                        ),
                     }
                 else:
                     self.layer_times[key] = {
-                        "backward": (value["backward_post"] - value["backward_pre"]).total_seconds(),
-                        "forward": (value["forward_post"] - value["forward_pre"]).total_seconds()
+                        "backward": (
+                            value["backward_post"] - value["backward_pre"]
+                        ).total_seconds(),
+                        "forward": (
+                            value["forward_post"] - value["forward_pre"]
+                        ).total_seconds(),
                     }
             except:
                 pass
 
-        return json.dumps(self.layer_times, sort_keys=True, indent=4)
+        return self.layer_times

@@ -10,11 +10,10 @@ out = resnet(inp)
 
 with LayerProf(resnet) as layer_prof:
     for name, layer in get_children(resnet):
-        if 'relu' in name or 'bn' in name:
+        if "relu" in name or "bn" in name:
             continue
         layer_prof.attach_backward_hook(name)
 
-    inp = torch.randn(10, 3, 224, 224)
     out = resnet(inp)
     out.sum().backward()
     layer_prof.get_timings()
