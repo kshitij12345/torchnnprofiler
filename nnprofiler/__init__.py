@@ -1,22 +1,13 @@
 import torch
-import datetime
 from functools import partial
+import itertools
+from .utils import get_children, CPUEvent
 
 
-def get_children(model: torch.nn.Module, name=""):
-    children = list(model.named_children())
-    flatt_children = []
-    # Base case
-    if children == []:
-        return [
-            [name, model],
-        ]
-
-    for child_name, child in children:
-        if name != "":
-            child_name = name + "." + child_name
-        flatt_children.extend(get_children(child, child_name))
-    return flatt_children
+def get_device_event(device: torch.device):
+    if device == torch.device("cuda"):
+        return torch.cuda.Event(enable_timing=True)
+    return CPUEvent()
 
 
 class LayerProf:
@@ -25,37 +16,29 @@ class LayerProf:
         self.model = model
         self.profile_all_layers = profile_all_layers
         self.in_context_mode = False
-        self.layers_event = {}
-        self.layers = {}
-        self.layer_to_name = {}
-        self.layer_device = {}
+        self._layers_event = {}
+        self._layers = {}
         self.cnt = 0
-        self.removable_handles = []
+        self._hook_handles = []
 
         for name, layer in get_children(self.model):
-            params = list(layer.parameters())
-            if params == []:
-                self.layer_device[name] = None
-            else:
-                self.layer_device[name] = params[0].device
-            self.layer_to_name[layer] = name
-            self.layers[name] = layer
+            self._layers[name] = layer
 
-            if self.layer_device[name] == torch.device("cuda"):
-                self.layers_event[name] = {
-                    "forward_pre": torch.cuda.Event(enable_timing=True),
-                    "backward_pre": torch.cuda.Event(enable_timing=True),
-                    "forward_post": torch.cuda.Event(enable_timing=True),
-                    "backward_post": torch.cuda.Event(enable_timing=True),
-                }
+            params_slice = list(itertools.islice(layer.parameters(), 1))
+            if params_slice == []:
+                layer_device = None
             else:
-                self.layers_event[name] = {
-                    "forward_pre": None,
-                    "backward_pre": None,
-                    "forward_post": None,
-                    "backward_post": None,
-                }
-            
+                layer_device = params_slice[0].device
+
+            # TODO: Only create event for layer if
+            # it is going to be profiled!
+            self._layers_event[name] = {
+                "forward_pre": get_device_event(layer_device),
+                "backward_pre": get_device_event(layer_device),
+                "forward_post": get_device_event(layer_device),
+                "backward_post": get_device_event(layer_device),
+            }
+
             if self.profile_all_layers:
                 self._attach_backward_hook(name)
 
@@ -69,12 +52,13 @@ class LayerProf:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        for handle in self.removable_handles:
+        for handle in self._hook_handles:
+            # Remove all the hooks that we attached!
             handle.remove()
 
-    def _register_cuda_hooks(self, name):
-        events = self.layers_event[name]
-        layer: torch.nn.Module = self.layers[name]
+    def _register_hooks(self, name):
+        events = self._layers_event[name]
+        layer: torch.nn.Module = self._layers[name]
 
         def bw_pre_hook(module, _):
             events["backward_pre"].record()
@@ -90,48 +74,20 @@ class LayerProf:
             self.cnt += 1
             events["forward_post"].record()
 
-        layer.register_forward_pre_hook(fw_pre_hook)
-        layer.register_forward_hook(fw_hook)
+        self._hook_handles.append(layer.register_forward_pre_hook(fw_pre_hook))
+        self._hook_handles.append(layer.register_forward_hook(fw_hook))
 
-        layer.register_full_backward_pre_hook(bw_pre_hook)
-        layer.register_full_backward_hook(bw_hook)
-
-    def _register_cpu_hooks(self, name):
-        events = self.layers_event[name]
-        layer: torch.nn.Module = self.layers[name]
-
-        def bw_pre_hook(module, _):
-            events["backward_pre"] = datetime.datetime.now()
-
-        def bw_hook(module, _, _1):
-            self.cnt += 1
-            events["backward_post"] = datetime.datetime.now()
-
-        def fw_pre_hook(module, _):
-            events["forward_pre"] = datetime.datetime.now()
-
-        def fw_hook(module, _, _1):
-            self.cnt += 1
-            events["forward_post"] = datetime.datetime.now()
-
-        layer.register_forward_pre_hook(fw_pre_hook)
-        layer.register_forward_hook(fw_hook)
-
-        layer.register_full_backward_pre_hook(bw_pre_hook)
-        layer.register_full_backward_hook(bw_hook)
+        self._hook_handles.append(layer.register_full_backward_pre_hook(bw_pre_hook))
+        self._hook_handles.append(layer.register_full_backward_hook(bw_hook))
 
     def _attach_backward_hook(self, name):
-        device = self.layer_device[name]
-        if device == torch.device("cuda"):
-            self._register_cuda_hooks(name)
-
-        self._register_cpu_hooks(name)
+        self._register_hooks(name)
 
     def attach_backward_hook(self, name):
         msg = "Manually attaching hook is only allowed when profile_all_layers is False"
         assert self.profile_all_layers is False, msg
         self._throw_if_not_in_context_mode()
-        self._attach_backward_hook(name)
+        self._register_hooks(name)
 
     def get_timings(self):
         self._throw_if_not_in_context_mode()
@@ -141,34 +97,27 @@ class LayerProf:
                 "None of the layer recorded time. Did you call forward or backward?"
             )
 
-        for key, value in self.layers_event.items():
+        for key, value in self._layers_event.items():
             try:
-                if self.layer_device[key] == torch.device("cuda"):
-                    self.layer_times[key] = {
-                        "backward": value["backward_pre"].elapsed_time(
-                            value["backward_post"]
-                        ),
-                        "forward": value["forward_pre"].elapsed_time(
-                            value["forward_post"]
-                        ),
-                    }
-                else:
-                    self.layer_times[key] = {
-                        "backward": (
-                            value["backward_post"] - value["backward_pre"]
-                        ).total_seconds(),
-                        "forward": (
-                            value["forward_post"] - value["forward_pre"]
-                        ).total_seconds(),
-                    }
-            except:
+                self.layer_times[key] = {
+                    "backward": value["backward_pre"].elapsed_time(
+                        value["backward_post"]
+                    ),
+                    "forward": value["forward_pre"].elapsed_time(value["forward_post"]),
+                }
+            except Exception as e:
+                # TODO: Handle these better!
                 pass
 
         return self.layer_times
 
     def layerwise_summary(self):
+        if not hasattr(self, "layers"):
+            self.get_timings()
+
         prev_objs = {}
-        for name, layer in self.layers.items():
+        for name, layer in self._layers.items():
+
             def repr_fn(name):
                 if not hasattr(self, "layer_times"):
                     return ""
@@ -186,7 +135,7 @@ class LayerProf:
 
         return_str = self.model.__repr__()
 
-        for name, layer in self.layers.items():
+        for name, layer in self._layers.items():
             layer.extra_repr = prev_objs[layer]
 
         return return_str
