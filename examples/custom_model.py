@@ -11,6 +11,7 @@ class MyNet(torch.nn.Module):
     def forward(self, x):
         return self.linear2(x) + self.linear1(x)
 
+
 net = MyNet()
 
 # Warm-up
