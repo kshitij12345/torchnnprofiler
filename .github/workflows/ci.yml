@@ -39,6 +39,7 @@ jobs:
     - name: Install nnprofiler
       run: |
         python setup.py install
+        python -c "import nnprofiler"
     - name: Test
       run: |
         pytest nnprofiler/tests/*
