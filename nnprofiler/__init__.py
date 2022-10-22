@@ -46,19 +46,6 @@ class LayerProf:
             self.layer_to_name[layer] = name
             self.layers[name] = layer
 
-            def repr_fn(name):
-                if not hasattr(self, "layer_times"):
-                    return ""
-
-                if name in self.layer_times:
-                    times = self.layer_times[name]
-                    forward_str = "Forward Time: " + str(times["forward"])
-                    backward_str = "Backward Time: " + str(times["backward"])
-                    return forward_str + " | " + backward_str
-
-                return ""
-
-            layer.extra_repr = partial(repr_fn, name=name)
             if self.layer_device[name] == torch.device("cuda"):
                 self.layers_event[name] = {
                     "forward_pre": torch.cuda.Event(enable_timing=True),
@@ -168,3 +155,28 @@ class LayerProf:
                 pass
 
         return self.layer_times
+
+    def layerwise_summary(self):
+        prev_objs = {}
+        for name, layer in self.layers.items():
+            def repr_fn(name):
+                if not hasattr(self, "layer_times"):
+                    return ""
+
+                if name in self.layer_times:
+                    times = self.layer_times[name]
+                    forward_str = "Forward Time: " + str(times["forward"])
+                    backward_str = "Backward Time: " + str(times["backward"])
+                    return forward_str + " | " + backward_str
+
+                return ""
+
+            prev_objs[layer] = layer.extra_repr
+            layer.extra_repr = partial(repr_fn, name=name)
+
+        return_str = self.model.__repr__()
+
+        for name, layer in self.layers.items():
+            layer.extra_repr = prev_objs[layer]
+
+        return return_str

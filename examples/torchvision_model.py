@@ -17,4 +17,4 @@ with LayerProf(resnet) as layer_prof:
     out = resnet(inp)
     out.sum().backward()
     layer_prof.get_timings()
-    print(resnet)
+    print(layer_prof.layerwise_summary())
