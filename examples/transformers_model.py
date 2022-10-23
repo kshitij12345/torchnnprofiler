@@ -22,5 +22,4 @@ with LayerProf(model) as prof:
     loss = outputs.loss
     loss.backward()
 
-    prof.get_timings()
     print(prof.layerwise_summary())
