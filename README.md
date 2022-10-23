@@ -37,13 +37,15 @@ MyNet(
 )
 ```
 
-As expected, we see that `linear2` takes much longer than `linear1` for both forward and backward.
+As expected, we see that `linear2` takes much longer than `linear1` for both forward and backward. For more examples, checkout the `examples` directory.
+
+**Note**: This is not a benchmarking utility like `timeit` or `pytorch.utils.benchmark` which run a piece of code multiple times to capture more accurate timings
 
 #### Motivation
 
-While training a model, it is important to know about the performance characteristics of the model, especially, if it will be deployed in production. To that end, knowing how long each layer takes for computation can help you find bottlenecks so that you can take an appropriate action.
+While training a model, it is important to know about the performance characteristics of the model, especially, if it will be deployed in production. To that end, knowing how long each layer takes for computation can help you find bottlenecks.
 
-#### Why nnprofiler instead of torch.profiler?
+#### Why `nnprofiler` instead of `torch.profiler`?
 
 PyTorch already ships with a utility to profile your code, so why another? It's simple that each of them target different use-case and work at different levels.
 
