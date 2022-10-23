@@ -41,6 +41,16 @@ As expected, we see that `linear2` takes much longer than `linear1` for both for
 
 **Note**: This is not a benchmarking utility like `timeit` or `pytorch.utils.benchmark` which run a piece of code multiple times to capture more accurate timings
 
+#### Installation
+
+```
+$ git clone https://github.com/kshitij12345/torchnnprofiler.git
+$ cd torchnnprofiler
+$ python setup.py install  # Note: You should install PyTorch nightly.
+```
+
+Link to install PyTorch Nightly: https://pytorch.org
+
 #### Motivation
 
 While training a model, it is important to know about the performance characteristics of the model, especially, if it will be deployed in production. To that end, knowing how long each layer takes for computation can help you find bottlenecks.
