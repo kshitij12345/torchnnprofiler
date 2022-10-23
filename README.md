@@ -45,7 +45,7 @@ While training a model, it is important to know about the performance characteri
 
 #### Why nnprofiler instead of torch.profiler?
 
-PyTorch already ships with two utilities to time your code, so why another? It's simple that each of them target different use-case and work at different levels.
+PyTorch already ships with a utility to profile your code, so why another? It's simple that each of them target different use-case and work at different levels.
 
 [torch.profiler](https://pytorch.org/docs/stable/profiler.html) helps profile the model at the granularity of PyTorch operators. This means that one has to guess which layer that belongs to and also if you use `conv` at multiple places then how long is each one taking.
 
