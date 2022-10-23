@@ -13,13 +13,11 @@ class MyNet(torch.nn.Module):
 
 
 net = MyNet()
-
+input = torch.randn(16, 10)
 # Warm-up
-y = net(torch.randn(16, 10, requires_grad=True))
-y.sum().backward()
+net().sum().backward()
 
 with LayerProf(net) as prof:
-    y = net(torch.randn(16, 10, requires_grad=True))
-    y.sum().backward()
+    net().sum().backward()
 
     print(prof.layerwise_summary())
