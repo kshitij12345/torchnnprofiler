@@ -70,7 +70,11 @@ Example of `torch.profiler`'s profile for `resnet18` from `torchvision`:
 # Self CPU time total: 57.549ms
 ```
 
-Running `LayerProf` on `resnet18` as
+Running `LayerProf` on `resnet18` with following code gives us
+<details>
+
+<summary>Profile Code</summary>
+
 ```python
 import torchvision
 import torch
@@ -97,6 +101,7 @@ with LayerProf(resnet, profile_all_layers=False) as layer_prof:
     print(layer_prof.layerwise_summary())
 
 ```
+</details>
 
 Output
 ```
