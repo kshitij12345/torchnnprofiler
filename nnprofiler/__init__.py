@@ -117,7 +117,7 @@ class LayerProf:
 
         prev_objs = {}
         for name, layer in self._layers.items():
-
+            # Hacky stuff below!
             def repr_fn(name):
                 if not hasattr(self, "layer_times"):
                     return ""
