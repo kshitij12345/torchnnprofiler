@@ -103,7 +103,7 @@ with LayerProf(resnet, profile_all_layers=False) as layer_prof:
 ```
 </details>
 
-Output
+**Output:**
 ```
 ResNet(
   (conv1): Conv2d(Forward Time: 121.985564ms | Backward Time: 0.012790ms)
@@ -191,6 +191,8 @@ ResNet(
 )
 ```
 
-**NOTE**: That we are unable to capture the timings for `bn` and `RELU` because of https://github.com/pytorch/pytorch/issues/61519
+**NOTE**: We are unable to capture the timings for `bn` and `RELU` because of inplace operations either performed by the layer or following it.
+
+Ref: https://github.com/pytorch/pytorch/issues/61519
 
 #### IMPORTANT: The hooks mechanism that we utilize for timing the backward pass is only available on the nightly version of PyTorch and will take a few months to be released in the stable version.
