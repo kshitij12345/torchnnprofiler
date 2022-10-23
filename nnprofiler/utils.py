@@ -23,8 +23,8 @@ class CPUEvent:
         self.event_time = None
 
     def record(self):
-        self.event_time = time.process_time()
+        self.event_time = time.process_time_ns()
 
     def elapsed_time(self, other):
         assert other.event_time > self.event_time
-        return other.event_time - self.event_time
+        return (other.event_time - self.event_time) * 1e-6

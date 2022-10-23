@@ -111,7 +111,7 @@ class LayerProf:
 
         return self.layer_times
 
-    def layerwise_summary(self):
+    def layerwise_summary(self, precision=6):
         if not hasattr(self, "layers"):
             self.get_timings()
 
@@ -124,8 +124,10 @@ class LayerProf:
 
                 if name in self.layer_times:
                     times = self.layer_times[name]
-                    forward_str = "Forward Time: " + str(times["forward"])
-                    backward_str = "Backward Time: " + str(times["backward"])
+                    ftime = times['forward']
+                    btime = times['backward']
+                    forward_str = f"Forward Time: {ftime:.{precision}f}ms"
+                    backward_str = f"Backward Time: {btime:.{precision}f}ms"
                     return forward_str + " | " + backward_str
 
                 return ""
