@@ -124,8 +124,8 @@ class LayerProf:
 
                 if name in self.layer_times:
                     times = self.layer_times[name]
-                    ftime = times['forward']
-                    btime = times['backward']
+                    ftime = times["forward"]
+                    btime = times["backward"]
                     forward_str = f"Forward Time: {ftime:.{precision}f}ms"
                     backward_str = f"Backward Time: {btime:.{precision}f}ms"
                     return forward_str + " | " + backward_str
