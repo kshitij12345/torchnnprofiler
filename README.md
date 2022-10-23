@@ -191,6 +191,6 @@ ResNet(
 )
 ```
 
-NOTE: That we are unable to capture the timings for `bn` and `RELU` because of https://github.com/pytorch/pytorch/issues/61519
+**NOTE**: That we are unable to capture the timings for `bn` and `RELU` because of https://github.com/pytorch/pytorch/issues/61519
 
 #### IMPORTANT: The hooks mechanism that we utilize for timing the backward pass is only available on the nightly version of PyTorch and will take a few months to be released in the stable version.
