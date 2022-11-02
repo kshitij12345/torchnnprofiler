@@ -26,7 +26,9 @@ net(inp).sum().backward()
 with LayerProf(net) as prof:
     net(inp).sum().backward()
 
-    print(prof.layerwise_summary())
+    summary_str = prof.layerwise_summary()
+
+print(summary_str)
 ```
 
 Output
