@@ -25,8 +25,9 @@ net(inp).sum().backward()
 # This could be any model (torchvision, transformers or your custom model).
 with LayerProf(net) as prof:
     net(inp).sum().backward()
+    summary_str = prof.layerwise_summary()
 
-    print(prof.layerwise_summary())
+print(summary_str)
 ```
 
 Output
