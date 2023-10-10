@@ -2,7 +2,9 @@ import torch
 import time
 
 
-def get_children(model: torch.nn.Module, name=""):
+def get_children(model: torch.nn.Module, name=None):
+    if name is None:
+        name = model._get_name()
     children = list(model.named_children())
     flatt_children = []
     # Base case
@@ -10,7 +12,7 @@ def get_children(model: torch.nn.Module, name=""):
         return [
             [name, model],
         ]
-
+    flatt_children.append([name, model])
     for child_name, child in children:
         if name != "":
             child_name = name + "." + child_name

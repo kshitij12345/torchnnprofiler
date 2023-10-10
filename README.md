@@ -5,17 +5,27 @@
 #### Example
 ```python
 import torch
-from nnprofiler import LayerProf
-
-
+import torch.nn as nn
 class MyNet(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.linear1 = torch.nn.Linear(10, 1)
-        self.linear2 = torch.nn.Linear(10, 10000)
-
+        self.weight = nn.Parameter(torch.randn(10,1))
+        self.linear1 = torch.nn.Linear(10, 11)
+        self.linear2 = torch.nn.Linear(10, 10)
+        self.linear3 = nn.ModuleList()
+        self.linear3.append(torch.nn.Linear(11, 12))
+        self.linear3.append(torch.nn.Linear(12, 11))
+        self.linear4 = nn.Sequential(nn.Linear(11,7),nn.Tanh(),nn.Linear(7,8))
+        self.linear5 = nn.ModuleDict()
+        self.linear5['a'] = nn.Linear(8,3)
+        self.linear5['b'] = nn.Linear(3,1)
     def forward(self, x):
-        return self.linear2(x) + self.linear1(x)
+        x= torch.nn.functional.tanh(self.linear2(x)@self.weight ) + self.linear3[0](self.linear1(x))
+        x= self.linear3[1](x)
+        x= self.linear4(x)
+        x= self.linear5['a'](x)
+        x= self.linear5['b'](x)
+        return x
 
 net = MyNet()
 inp = torch.randn(16, 10)
@@ -26,33 +36,104 @@ net(inp).sum().backward()
 with LayerProf(net) as prof:
     net(inp).sum().backward()
     summary_str = prof.layerwise_summary()
+    pool = prof.layerwise_timepool()
 
-print(summary_str)
 ```
+- A string summary in `summary_str = prof.layerwise_summary()` like
+  ```
+  print(summary_str)
+  ---------------------------------------------------------
+  MyNet【Forward Time: 2.098945ms|Backward Time: 0.010771ms】(
+    (linear1): Linear(Forward Time: 0.041632ms|Backward Time: 0.014860ms)
+    (linear2): Linear(Forward Time: 0.621580ms|Backward Time: 0.009877ms)
+    (linear3): ModuleList(
+      (0): Linear(Forward Time: 0.054222ms|Backward Time: 0.048355ms)
+      (1): Linear(Forward Time: 0.053606ms|Backward Time: 0.050200ms)
+    )
+    (linear4): Sequential【Forward Time: 0.315535ms|Backward Time: 0.229794ms】(
+      (0): Linear(Forward Time: 0.069707ms|Backward Time: 0.070743ms)
+      (1): Tanh(Forward Time: 0.044920ms|Backward Time: 0.039867ms)
+      (2): Linear(Forward Time: 0.048994ms|Backward Time: 0.046925ms)
+    )
+    (linear5): ModuleDict(
+      (a): Linear(Forward Time: 0.045158ms|Backward Time: 0.084371ms)
+      (b): Linear(Forward Time: 0.046064ms|Backward Time: 0.099857ms)
+    )
+  )
+  ```
+- A tree-like time count in `pool=prof.layerwise_timepool()`
+  ```
+  from nnprofiler.visulization import print_namespace_tree
+  print_namespace_tree(pool)
+  -----------------------------------------------------------
+  MyNet
+    forward_cost                   ---> 2.098945
+    backward_cost                  ---> 0.010771
+    deepth                         ---> 0
+    collect_flag                   ---> none
+    children
+        MyNet.linear1
+            forward_cost                   ---> 0.041632
+            backward_cost                  ---> 0.01486
+            deepth                         ---> 1
+            collect_flag                   ---> none
+        MyNet.linear2
+            forward_cost                   ---> 0.62158
+            backward_cost                  ---> 0.009877
+            deepth                         ---> 1
+            collect_flag                   ---> none
+        MyNet.linear3
+            deepth                         ---> 1
+            collect_flag                   ---> list
+            children
+                MyNet.linear3.0
+                    forward_cost                   ---> 0.054222
+                    backward_cost                  ---> 0.0484
+                    deepth                         ---> 2
+                    collect_flag                   ---> none
+                MyNet.linear3.1
+                    forward_cost                   ---> 0.053606
+                    backward_cost                  ---> 0.0509
+                    deepth                         ---> 2
+                    collect_flag                   ---> none
+        ....................
+  ```
 
-Output
-```
-MyNet(
-  (linear1): Linear(Forward Time: 0.027650ms | Backward Time: 0.053989ms)
-  (linear2): Linear(Forward Time: 0.195528ms | Backward Time: 0.524774ms)
-)
-```
+- You can visulize the cost by 
 
-As expected, we see that `linear2` takes much longer than `linear1` for both forward and backward. For more examples, checkout the `examples` directory.
+  ```
+  fig,ax = visulize_the_profile_dict(pool,time_flag=['forward_cost'],figsize=(8,8), output_path='test.png')
+  ```
 
-**Note**: This is not a benchmarking utility like `timeit` or `pytorch.utils.benchmark` which run a piece of code multiple times to capture more accurate timings
+  ![](.\figures\test.png)
+
+**Note**: 
+ - we only collect once forward time and backward time. This is not a benchmarking utility like `timeit` or `pytorch.utils.benchmark` which run a piece of code multiple times to capture more accurate timings
+ - This module only works that a `nn.Module` return a Tensor of tuple of Tensors, otherwise, you fail to build hood. 
+ ```
+ WARNING: For backward hooks to be called, module output should be a Tensor or a tuple of Tensors
+ ```
 
 #### Installation
 
 ```
 $ git clone https://github.com/kshitij12345/torchnnprofiler.git
 $ cd torchnnprofiler
-$ python setup.py install  # Note: You should install PyTorch nightly.
+$ python setup.py install  # Note: It works for pytorch > 2.
 ```
 
-Link to install PyTorch Nightly: https://pytorch.org
+~~Link to install PyTorch Nightly: https://pytorch.org~~
+It is now work for the the pytorch 2
 
-#### Motivation
+#### visulize arguments
+  `time_flag` are using for channel choose. The default is 
+  `time_flag='forward_cost'`
+  
+  It can be `'forward_cost'` , `'backward_cost'`, or the list `['backward_cost','backward_cost']`
+
+  Currently, the `'backward_cost'` cannot successfully record the backward time for the ROOT `nn.Module`, which is the while model. If you have any idea about this, welcome for pull-request or issue.
+  
+## Motivation
 
 While training a model, it is important to know about the performance characteristics of the model, especially, if it will be deployed in production. To that end, knowing how long each layer takes for computation can help you find bottlenecks.
 
@@ -81,129 +162,56 @@ Example of `torch.profiler`'s profile for `resnet18` from `torchvision`:
 # Self CPU time total: 57.549ms
 ```
 
-Running `LayerProf` on `resnet18` with following code gives us
-<details>
+However, we want to have a high level profile that record time layer by layer, at least follow the level of `nn.Module`.
 
+# HuggingFace ViT example
+<details>
 <summary>Profile Code</summary>
 
 ```python
-import torchvision
-import torch
-from nnprofiler import LayerProf, get_children
+import transformers 
+def BaseModelOutput(last_hidden_state,hidden_states,attentions,):
+    return (last_hidden_state,hidden_states,attentions)
+transformers.models.vit.modeling_vit.BaseModelOutput = BaseModelOutput
+### The huggingface code wrapper the output into a dataclass named `BaseModelOutput` in ViT.
+### Should change it to tuple.
 
-resnet = torchvision.models.resnet18(weights=None)
+from transformers import ViTConfig, ViTModel
+# Initializing a ViT vit-base-patch16-224 style configuration
+configuration = ViTConfig()
+# Shrink Model, we don't need very large model for demo
+configuration.hidden_size = 128
+configuration.intermediate_size = 256
+configuration.num_hidden_layers = 4
+configuration.num_attention_heads = 16
+model = ViTModel(configuration)
+# Accessing the model configuration
+configuration = model.config
 
 # Warm-up
-inp = torch.randn(10, 3, 224, 224)
-out = resnet(inp)
+inp= torch.randn(1,3, 224,224).cuda()
+model=model.cuda()
+out= model(inp,return_dict=False)
 
-with LayerProf(resnet, profile_all_layers=False) as layer_prof:
-    names_and_layers = list(get_children(resnet))
-    for idx, (name, layer) in enumerate(names_and_layers):
-        # Hack around 
-        # https://github.com/pytorch/pytorch/issues/61519
-        if "relu" in name or "bn" in name:
-            continue
-        layer_prof.attach_backward_hook(name)
+with LayerProf(model) as prof:
+    model(inp,return_dict=False)[0].sum().backward()
+    summary_str = prof.layerwise_summary()
+    pool = prof.layerwise_timepool()
 
-    out = resnet(inp)
-    out.sum().backward()
-
-    print(layer_prof.layerwise_summary())
-
+# now you get the run-once-profile of this ViT model 
+# lets plot it 
+# 
+fig,ax = visulize_the_profile_dict(pool,time_flag=['forward_cost'],figsize=(16,16), output_path='test.png')
+plt.tight_layout() 
 ```
 </details>
 
 **Output:**
+![](.\figures\test_vit.png)
 ```
-ResNet(
-  (conv1): Conv2d(Forward Time: 121.985564ms | Backward Time: 0.012790ms)
-  (bn1): BatchNorm2d()
-  (relu): ReLU()
-  (maxpool): MaxPool2d(Forward Time: 125.893256ms | Backward Time: 125.614427ms)
-  (layer1): Sequential(
-    (0): BasicBlock(
-      (conv1): Conv2d(Forward Time: 1.803901ms | Backward Time: 127.819536ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 126.037036ms | Backward Time: 127.432800ms)
-      (bn2): BatchNorm2d()
-    )
-    (1): BasicBlock(
-      (conv1): Conv2d(Forward Time: 1.873590ms | Backward Time: 127.779866ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 1.842620ms | Backward Time: 128.236670ms)
-      (bn2): BatchNorm2d()
-    )
-  )
-  (layer2): Sequential(
-    (0): BasicBlock(
-      (conv1): Conv2d(Forward Time: 125.681849ms | Backward Time: 3.020898ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 1.290446ms | Backward Time: 127.308880ms)
-      (bn2): BatchNorm2d()
-      (downsample): Sequential(
-        (0): Conv2d(Forward Time: 0.603593ms | Backward Time: 125.808026ms)
-        (1): BatchNorm2d(Forward Time: 0.231657ms | Backward Time: 0.262567ms)
-      )
-    )
-    (1): BasicBlock(
-      (conv1): Conv2d(Forward Time: 125.161703ms | Backward Time: 127.133824ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 1.202197ms | Backward Time: 127.814146ms)
-      (bn2): BatchNorm2d()
-    )
-  )
-  (layer3): Sequential(
-    (0): BasicBlock(
-      (conv1): Conv2d(Forward Time: 0.995109ms | Backward Time: 122.874559ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 1.301246ms | Backward Time: 2.906958ms)
-      (bn2): BatchNorm2d()
-      (downsample): Sequential(
-        (0): Conv2d(Forward Time: 0.457235ms | Backward Time: 125.288073ms)
-        (1): BatchNorm2d(Forward Time: 0.153528ms | Backward Time: 0.160939ms)
-      )
-    )
-    (1): BasicBlock(
-      (conv1): Conv2d(Forward Time: 1.265666ms | Backward Time: 126.964594ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 125.179764ms | Backward Time: 3.120596ms)
-      (bn2): BatchNorm2d()
-    )
-  )
-  (layer4): Sequential(
-    (0): BasicBlock(
-      (conv1): Conv2d(Forward Time: 1.162807ms | Backward Time: 126.219883ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 126.034236ms | Backward Time: 62.486642ms)
-      (bn2): BatchNorm2d()
-      (downsample): Sequential(
-        (0): Conv2d(Forward Time: 0.462975ms | Backward Time: 63.839558ms)
-        (1): BatchNorm2d(Forward Time: 0.122288ms | Backward Time: 0.097689ms)
-      )
-    )
-    (1): BasicBlock(
-      (conv1): Conv2d(Forward Time: 125.842666ms | Backward Time: 126.943985ms)
-      (bn1): BatchNorm2d()
-      (relu): ReLU()
-      (conv2): Conv2d(Forward Time: 1.722881ms | Backward Time: 74.761527ms)
-      (bn2): BatchNorm2d()
-    )
-  )
-  (avgpool): AdaptiveAvgPool2d(Forward Time: 0.121119ms | Backward Time: 0.083329ms)
-  (fc): Linear(Forward Time: 0.181158ms | Backward Time: 9.337799ms)
-)
-```
-
 **NOTE**: We are unable to capture the timings for `bn` and `RELU` because of inplace operations either performed by the layer or following it.
 
 Ref: https://github.com/pytorch/pytorch/issues/61519
 
 #### IMPORTANT: The hooks mechanism that we utilize for timing the backward pass is only available on the nightly version of PyTorch and will take a few months to be released in the stable version.
+```
