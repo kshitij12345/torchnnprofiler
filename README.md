@@ -105,7 +105,7 @@ with LayerProf(net) as prof:
   fig,ax = visulize_the_profile_dict(pool,time_flag=['forward_cost'],figsize=(8,8), output_path='test.png')
   ```
 
-  ![](figures\test.png)
+  ![](figures/test.png)
 
 **Note**: 
  - we only collect once forward time and backward time. This is not a benchmarking utility like `timeit` or `pytorch.utils.benchmark` which run a piece of code multiple times to capture more accurate timings
@@ -207,7 +207,7 @@ plt.tight_layout()
 </details>
 
 **Output:**
-![](figures\test_vit.png)
+![](figures/test_vit.png)
 ```
 **NOTE**: We are unable to capture the timings for `bn` and `RELU` because of inplace operations either performed by the layer or following it.
 
